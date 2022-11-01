@@ -7,6 +7,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
+import kotlin.math.abs
 
 class TrackerView2(
     context: Context,
@@ -44,11 +45,13 @@ class TrackerView2(
     private val leftBound = XScrollable(
         leftTouchPadding = boundWidth + horizontalTouchPadding,
         rightTouchPadding = horizontalTouchPadding,
+        touchOffset = - boundWidth / 2,
         onNewX = { listener?.onNewVideoStartPosition(it) }
     )
     private val rightBound = XScrollable(
         leftTouchPadding = horizontalTouchPadding,
         rightTouchPadding = boundWidth + horizontalTouchPadding,
+        touchOffset = boundWidth / 2,
         onNewX = { listener?.onNewVideoEndPosition(it) }
     )
     private val tracker = XScrollable(
@@ -65,7 +68,7 @@ class TrackerView2(
     private fun dpToPx(dp: Float): Float =
         dp * context.resources.displayMetrics.density
 
-    private fun setXLimits() {
+    private fun updateXAxisLimits() {
         leftBound.maxX = rightBound.x - minimumDistance
         rightBound.minX = leftBound.x + minimumDistance
         tracker.minX = leftBound.x
@@ -77,12 +80,15 @@ class TrackerView2(
             when (motionEvent.action) {
                 MotionEvent.ACTION_DOWN -> {
                     performClick()
-                    setXLimits()
-                    xScrollables.firstOrNull { it.isTouched(motionEvent.x) }?.let {
-                        it.beingScrolled = true
-                        if (!tracker.beingScrolled) animateTrackerVisibility(false)
-                        invalidate()
-                    }
+                    updateXAxisLimits()
+                    xScrollables
+                        .filter { it.isTouched(motionEvent.x) }
+                        .minByOrNull { it.getTouchDistance(motionEvent.x) }
+                        ?.let {
+                            it.beingScrolled = true
+                            if (!tracker.beingScrolled) animateTrackerVisibility(false)
+                            invalidate()
+                        }
                 }
                 MotionEvent.ACTION_UP -> {
                     if (leftBound.beingScrolled) tracker.x = leftBound.x
@@ -118,7 +124,7 @@ class TrackerView2(
     private fun getTrackerAlpha(): Int = trackerAlpha
 
     private fun animateTrackerVisibility(show: Boolean) {
-        val animator = ObjectAnimator.ofInt(this, "trackerAlpha", if (show) 0 else 255, if (show) 255 else 0).apply {
+        val animator = ObjectAnimator.ofInt(this, "trackerAlpha", if (show) trackerAlpha else 255, if (show) 255 else 0).apply {
             duration = 100
             interpolator = LinearInterpolator()
         }.apply {
@@ -215,11 +221,13 @@ class TrackerView2(
         var x: Float = 0f,
         var minX: Float = 0f,
         var maxX: Float = 0f,
+        var touchOffset: Float = 0f,
         var beingScrolled: Boolean = false,
         var leftTouchPadding: Float = 0f,
         var rightTouchPadding: Float = 0f,
-        val onNewX: (Long) -> Unit
+        val onNewX: (Long) -> Unit,
     ) {
+        fun getTouchDistance(x: Float) = abs((x - this.x + touchOffset))
         fun isTouched(x: Float) = (x >= this.x - leftTouchPadding && x <= this.x + rightTouchPadding)
         fun setDesiredX(x: Float) {
             when {
@@ -228,10 +236,10 @@ class TrackerView2(
                 x in minX..maxX -> this.x = x
                 else -> {}
             }
-            onNewX.invoke(getCurrentTimeInMillis())
+            onNewX.invoke(getCurrentPositionInMillis())
         }
 
-        private fun getCurrentTimeInMillis() =
+        private fun getCurrentPositionInMillis() =
             (maxTimeLineInMillis * (x - horizontalPadding - boundWidth) / maxTimelineWidth).toLong()
     }
 
