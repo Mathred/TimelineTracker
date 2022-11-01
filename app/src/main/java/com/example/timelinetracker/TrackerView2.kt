@@ -7,6 +7,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
+import java.lang.ref.WeakReference
 import kotlin.math.abs
 
 class TrackerView2(
@@ -34,7 +35,7 @@ class TrackerView2(
     private val horizontalPadding = dpToPx(16f)
     private var overlayVerticalPadding = dpToPx(6f)
 
-    private var listener: OnTimelineChangeListener? = null
+    private var listener: WeakReference<OnTimelineChangeListener>? = null
 
     private var videoDuration = 0L
     private var maxTimeLineInMillis = 0L
@@ -46,18 +47,18 @@ class TrackerView2(
         leftTouchPadding = boundWidth + horizontalTouchPadding,
         rightTouchPadding = horizontalTouchPadding,
         touchOffset = - boundWidth / 2,
-        onNewX = { listener?.onNewVideoStartPosition(it) }
+        onNewX = { listener?.get()?.onNewVideoStartPosition(it) }
     )
     private val rightBound = XScrollable(
         leftTouchPadding = horizontalTouchPadding,
         rightTouchPadding = boundWidth + horizontalTouchPadding,
         touchOffset = boundWidth / 2,
-        onNewX = { listener?.onNewVideoEndPosition(it) }
+        onNewX = { listener?.get()?.onNewVideoEndPosition(it) }
     )
     private val tracker = XScrollable(
         leftTouchPadding = trackerWidth / 2 + horizontalTouchPadding,
         rightTouchPadding = trackerWidth / 2 + horizontalTouchPadding,
-        onNewX = { listener?.onNewTrackerPosition(it) }
+        onNewX = { listener?.get()?.onNewTrackerPosition(it) }
     )
     private val xScrollables = listOf(
         tracker,
@@ -108,7 +109,7 @@ class TrackerView2(
     }
 
     fun setTimelineChangeListener(listener: OnTimelineChangeListener) {
-        this.listener = listener
+        this.listener = WeakReference(listener)
     }
 
     fun setVideoDuration(duration: Long) {
