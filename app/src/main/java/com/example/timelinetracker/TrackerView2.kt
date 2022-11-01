@@ -41,7 +41,7 @@ class TrackerView2(
     private var maxTimeLineInMillis = 0L
     private var maxTimelineWidth = 0f
 
-    private val horizontalTouchPadding = dpToPx(4f)
+    private val horizontalTouchPadding = dpToPx(32f)
 
     private val leftBound = XScrollable(
         leftTouchPadding = boundWidth + horizontalTouchPadding,
@@ -228,7 +228,7 @@ class TrackerView2(
         var rightTouchPadding: Float = 0f,
         val onNewX: (Long) -> Unit,
     ) {
-        fun getTouchDistance(x: Float) = abs((x - this.x + touchOffset))
+        fun getTouchDistance(x: Float) = abs((x - this.x - touchOffset))
         fun isTouched(x: Float) = (x >= this.x - leftTouchPadding && x <= this.x + rightTouchPadding)
         fun setDesiredX(x: Float) {
             when {
