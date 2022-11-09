@@ -4,11 +4,14 @@ import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.*
 import android.util.AttributeSet
+import android.util.Log
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
 import java.lang.ref.WeakReference
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 class TrackerView2(
     context: Context,
@@ -18,6 +21,7 @@ class TrackerView2(
     companion object {
         const val MAX_VIDEO_DURATION = 3 * 60_000L
         const val MIN_DISTANCE_IN_MILLISECONDS = 2_000L
+        const val LONG_PRESS_THRESHOLD = 100
     }
 
     private var minimumDistance = 0f
@@ -32,7 +36,7 @@ class TrackerView2(
     private val overlayHeight = dpToPx(44f)
 
     private val boundsVerticalPadding = dpToPx(4f)
-    private val horizontalPadding = dpToPx(16f)
+    private val horizontalPadding = dpToPx(18f)
     private var overlayVerticalPadding = dpToPx(6f)
 
     private var listener: WeakReference<OnTimelineChangeListener>? = null
@@ -76,8 +80,23 @@ class TrackerView2(
         tracker.maxX = rightBound.x
     }
 
+    private var isLongPressed = false
+
+    private val gestureDetector by lazy {
+        GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onLongPress(p0: MotionEvent?) {
+                Log.d("SAY123", "onLongPress hasScrolled $hasScrolled")
+                isLongPressed = !hasScrolled
+            }
+        })
+    }
+
+    private var actionDownX = 0f
+    private var hasScrolled = false
+
     init {
         setOnTouchListener { _, motionEvent ->
+//            Log.d("SAY123","setOnTouchListener $motionEvent")
             when (motionEvent.action) {
                 MotionEvent.ACTION_DOWN -> {
                     performClick()
@@ -89,18 +108,30 @@ class TrackerView2(
                             it.beingScrolled = true
                             if (!tracker.beingScrolled) animateTrackerVisibility(false)
                             invalidate()
-                        }
+                        } ?: run {
+                            actionDownX = motionEvent.x
+                            gestureDetector.onTouchEvent(motionEvent)
+                    }
                 }
                 MotionEvent.ACTION_UP -> {
                     if (leftBound.beingScrolled) tracker.x = leftBound.x
                     if (rightBound.beingScrolled) tracker.x = rightBound.x
                     xScrollables.forEach { it.beingScrolled = false }
                     animateTrackerVisibility(true)
+                    isLongPressed = false
+                    hasScrolled = false
                 }
                 else -> {
+                    val dx = motionEvent.x - x
+                    hasScrolled = dx*dx > LONG_PRESS_THRESHOLD
                     xScrollables.firstOrNull { it.beingScrolled }?.let {
                         it.setDesiredX(motionEvent.x)
                         invalidate()
+                    }
+                    if (isLongPressed) {
+                        Log.d("SAY123", "isLongPressed == true, motionEvent.x ${motionEvent.x}, actionDownX $actionDownX, dx: ${motionEvent.x - actionDownX}}")
+                        listener?.get()?.onDragAndDrop(motionEvent.x - actionDownX)
+                        actionDownX = motionEvent.x
                     }
                 }
             }
@@ -113,7 +144,10 @@ class TrackerView2(
     }
 
     fun setVideoDuration(duration: Long) {
+        Log.d("SAY123", "setVideoDuration $duration")
         videoDuration = duration
+        updateXAxisLimits()
+        invalidate()
     }
 
     private var trackerAlpha = 255
@@ -249,6 +283,7 @@ class TrackerView2(
         fun onNewVideoStartPosition(startPosition: Long)
         fun onNewVideoEndPosition(endPosition: Long)
         fun onNewTrackerPosition(trackerPosition: Long)
+        fun onDragAndDrop(dx: Float)
 
     }
 
